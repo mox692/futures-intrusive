@@ -156,6 +156,8 @@ where
                     // If the capacity is exhausted, register a waiter
                     wait_node.task = Some(cx.waker().clone());
                     wait_node.state = SendPollState::Registered;
+                    // MEMO: pinされているChannelSendFutureから取得される.
+                    // wait_nodeはFutureがdropされるまでinvalidateされる心配がない
                     self.send_waiters.add_front(wait_node);
 
                     // Return the oldest receive waiter
@@ -424,6 +426,7 @@ where
     /// If the channel gets closed while the send is in progress, sending the
     /// value will fail, and the future will deliver the value back.
     pub fn send(&self, value: T) -> ChannelSendFuture<MutexType, T> {
+        // MEMO: ChannelSendFutureがpollされているときは, この構造体もpinされていることが保証される(pinの定義より)
         ChannelSendFuture {
             channel: Some(self),
             wait_node: ListNode::new(SendWaitQueueEntry::new(value)),
@@ -512,6 +515,7 @@ where
         let (poll_result, value, waker) =
             { self.inner.lock().send_or_register(wait_node, cx) };
 
+        // 一番古いwaiter(receiver)をwakeする
         if let Some(waker) = waker {
             waker.wake();
         }
@@ -541,6 +545,7 @@ where
 
         match result {
             Poll::Ready(Some((val, waker))) => {
+                // senderがもし詰まってたら, wakeする
                 if let Some(waker) = waker {
                     waker.wake();
                 }

@@ -54,3 +54,7 @@ required-features = ["std"]
 [[example]]
 name = "philosophers"
 required-features = ["std"]
+
+[[example]]
+name = "chan"
+required-features = ["std"]

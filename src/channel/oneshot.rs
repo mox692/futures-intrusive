@@ -13,6 +13,7 @@ use core::marker::PhantomData;
 use futures_core::task::{Context, Poll};
 use lock_api::{Mutex, RawMutex};
 
+// oneshotの場合はwaitersに1つの要素しか入らないはず(?)
 fn wake_waiters(waiters: &mut LinkedList<RecvWaitQueueEntry>) {
     // Remove all waiters from the waiting list in reverse order and wake them.
     // We reverse the waiter list, so that the oldest waker (which is
@@ -84,10 +85,13 @@ impl<T> ChannelState<T> {
         cx: &mut Context<'_>,
     ) -> Poll<Option<T>> {
         match wait_node.state {
+            // 初めてのpollの時
             RecvPollState::Unregistered => {
+                // senderがsendをしたかどうかをcheck
                 let maybe_val = self.value.take();
                 match maybe_val {
                     Some(v) => {
+                        // すでにあれば, 返す
                         // A value was available inside the channel and was fetched
                         Poll::Ready(Some(v))
                     }
@@ -107,6 +111,8 @@ impl<T> ChannelState<T> {
                 }
             }
             RecvPollState::Registered => {
+                // 以前pollして, pendingだった場合
+
                 // Since the channel wakes up all waiters and moves their states
                 // to unregistered there can't be any value in the channel in this state.
                 // However the caller might have passed a different `Waker`.
